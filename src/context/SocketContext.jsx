@@ -10,6 +10,8 @@ export function SocketProvider({ children }) {
   const [onlineUsers, setOnlineUsers] = useState(new Set());
   const [typingUsers, setTypingUsers] = useState(new Set());
   const [incomingMessage, setIncomingMessage] = useState(null);
+  const [messageReadEvent, setMessageReadEvent] = useState(null); // { readerId }
+  const [messageDeletedEvent, setMessageDeletedEvent] = useState(null); // { messageId }
   const [friendEvent, setFriendEvent] = useState(null);
   const [noStoreStates, setNoStoreStates] = useState({}); // friendId -> boolean
   const [clearedChatEvent, setClearedChatEvent] = useState(null); // { friendId }
@@ -32,6 +34,8 @@ export function SocketProvider({ children }) {
       setOnlineUsers(prev => { const n = new Set(prev); isOnline ? n.add(userId) : n.delete(userId); return n; });
     });
     s.on('message:new', (msg) => setIncomingMessage(msg));
+    s.on('message:read', (data) => setMessageReadEvent(data));
+    s.on('message:deleted', (data) => setMessageDeletedEvent(data));
     s.on('typing:start', ({ userId }) => setTypingUsers(prev => new Set(prev).add(userId)));
     s.on('typing:stop', ({ userId }) => setTypingUsers(prev => { const n = new Set(prev); n.delete(userId); return n; }));
     s.on('friend:request:received', (data) => setFriendEvent({ type: 'request', ...data }));
@@ -46,8 +50,16 @@ export function SocketProvider({ children }) {
     return () => { s.disconnect(); socketRef.current = null; };
   }, [token, user]);
 
-  const sendMessage = (receiverId, content, isTemporary = false) => { 
-    socket?.emit('message:send', { receiverId, content, isTemporary }); 
+  useEffect(() => {
+    if (socket && user?.activeStatusEnabled) {
+      socket.emit('get:online');
+    } else if (socket && !user?.activeStatusEnabled) {
+      setOnlineUsers(new Set());
+    }
+  }, [socket, user?.activeStatusEnabled]);
+
+  const sendMessage = (receiverId, content, isTemporary = false, image = null, audio = null) => { 
+    socket?.emit('message:send', { receiverId, content, isTemporary, image, audio }); 
   };
   const startTyping = (receiverId) => { socket?.emit('typing:start', { receiverId }); };
   const stopTyping = (receiverId) => { socket?.emit('typing:stop', { receiverId }); };
@@ -58,13 +70,14 @@ export function SocketProvider({ children }) {
   };
   const notifyFriendRequest = (toUserId) => { socket?.emit('friend:request', { toUserId }); };
   const notifyFriendAccepted = (toUserId) => { socket?.emit('friend:accepted', { toUserId }); };
-  const isOnline = (userId) => onlineUsers.has(userId);
+  const isOnline = (userId) => user?.activeStatusEnabled ? onlineUsers.has(userId) : false;
   const isTyping = (userId) => typingUsers.has(userId);
 
   return (
     <SocketContext.Provider value={{
       socket, onlineUsers, sendMessage, startTyping, stopTyping, markRead,
       isOnline, isTyping, incomingMessage, setIncomingMessage,
+      messageReadEvent, setMessageReadEvent, messageDeletedEvent, setMessageDeletedEvent,
       friendEvent, setFriendEvent, notifyFriendRequest, notifyFriendAccepted,
       noStoreStates, toggleNoStore, clearedChatEvent
     }}>

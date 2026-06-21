@@ -51,9 +51,11 @@ export default function Sidebar({ unreadCount = 0, requestCount = 0 }) {
   );
 }
 
-export function BottomNav({ unreadCount = 0, requestCount = 0 }) {
+export function BottomNav({ unreadCount = 0, requestCount = 0, hideOnChat = false }) {
   const location = useLocation();
   const navigate = useNavigate();
+
+  if (hideOnChat) return null;
 
   return (
     <div className="bottom-nav">

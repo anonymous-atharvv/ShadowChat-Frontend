@@ -41,14 +41,23 @@ function ChatPage() {
 
   const handleSelect = (c) => { setChatUser(c); setMobileShowChat(true); };
   const handleBack = () => { setMobileShowChat(false); setChatUser(null); };
-  const isMobile = window.innerWidth <= 768;
+
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   return (
     <div className="chat-layout">
       <div className={`chat-list-panel ${isMobile && mobileShowChat ? 'hidden' : ''}`}>
         <ChatList onSelectChat={handleSelect} activeChatId={chatUser?.id} />
       </div>
-      <div className={`${isMobile && !mobileShowChat ? 'hidden' : ''}`} style={{ flex: 1, display: 'flex', minWidth: 0 }}>
+      <div 
+        className={isMobile && !mobileShowChat ? 'hidden' : ''} 
+        style={{ flex: 1, display: isMobile && !mobileShowChat ? 'none' : 'flex', minWidth: 0 }}
+      >
         <Chat chatUser={chatUser} onBack={isMobile ? handleBack : null} />
       </div>
     </div>
@@ -58,7 +67,7 @@ function ChatPage() {
 function AppLayout() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [requestCount, setRequestCount] = useState(0);
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { incomingMessage, friendEvent } = useSocket();
   const { notify, activeChatId, requestPermission } = useNotification();
   const navigate = useNavigate();
@@ -84,7 +93,7 @@ function AppLayout() {
 
   // Trigger notification toast on incoming message
   useEffect(() => {
-    if (incomingMessage && incomingMessage.senderId !== activeChatId) {
+    if (incomingMessage && user && incomingMessage.senderId !== user.id && incomingMessage.senderId !== activeChatId) {
       // Fetch sender info for the notification
       fetch(`/api/users/${incomingMessage.senderId}`, { headers: { Authorization: `Bearer ${token}` } })
         .then(r => r.json())
@@ -137,6 +146,9 @@ function AppLayout() {
     }
   }, [friendEvent]);
 
+  const location = useLocation();
+  const isChatActive = location.pathname.startsWith('/chat/') && location.pathname !== '/chat';
+
   return (
     <div className="app-layout">
       <Sidebar unreadCount={unreadCount} requestCount={requestCount} />
@@ -150,7 +162,7 @@ function AppLayout() {
           <Route path="*" element={<Navigate to="/chat" replace />} />
         </Routes>
       </div>
-      <BottomNav unreadCount={unreadCount} requestCount={requestCount} />
+      <BottomNav unreadCount={unreadCount} requestCount={requestCount} hideOnChat={isChatActive} />
     </div>
   );
 }
