@@ -1,47 +1,47 @@
-/* ShadowChat Design System - Digital Noir & Glassmorphism */
+/* ShadowChat Design System - Premium Digital Noir & Glassmorphism - Orchid Violet Theme */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  /* Color Palette - Premium Hybrid Theme (Instagram Dark + WhatsApp Emerald) */
-  --bg-primary: #090a10; /* Deep Obsidian Slate */
-  --bg-secondary: rgba(18, 20, 30, 0.7); /* Glassmorphic Card Background */
-  --bg-tertiary: rgba(28, 31, 48, 0.55);
-  --bg-card: rgba(255, 255, 255, 0.04);
-  --bg-hover: rgba(255, 255, 255, 0.08);
-  --bg-active: rgba(0, 191, 165, 0.15); /* Active state styled with WhatsApp Emerald */
-  --border: rgba(255, 255, 255, 0.08);
-  --border-hover: rgba(255, 255, 255, 0.15);
+  /* Color Palette - Premium Top 1% (Deep Obsidian Space + Glowing Orchid Violet) */
+  --bg-primary: #07080a; /* Ultra Deep Obsidian */
+  --bg-secondary: rgba(13, 16, 24, 0.8); /* Frosted Slate Glass */
+  --bg-tertiary: rgba(20, 24, 36, 0.6);
+  --bg-card: rgba(255, 255, 255, 0.03);
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-active: rgba(139, 92, 246, 0.15); /* Premium Violet Active state */
+  --border: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.12);
   
-  --text-primary: #f8fafc; /* Ice White */
-  --text-secondary: #cbd5e1; /* Slate Grey */
-  --text-muted: #64748b; /* Muted Slate */
+  --text-primary: #f8fafc; /* Crisp Clean White */
+  --text-secondary: #94a3b8; /* Elegant Slate Grey */
+  --text-muted: #475569; /* Muted Slate */
   
-  --primary: #00bfa5; /* Premium WhatsApp Mint Teal */
-  --primary-hover: #00a892;
-  --accent: #00bfa5;
-  --accent-container: rgba(0, 191, 165, 0.15);
+  --primary: #a855f7; /* Premium Purple/Orchid */
+  --primary-hover: #9333ea;
+  --accent: #6366f1; /* Royal Indigo Accent */
+  --accent-container: rgba(168, 85, 247, 0.1);
   
-  /* Instagram Sunset brand gradient for Story circles, logo icon, primary buttons */
-  --accent-gradient: linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
-  --accent-glow: rgba(220, 39, 67, 0.35);
+  /* Stunning Royal Orchid brand gradient */
+  --accent-gradient: linear-gradient(135deg, #a855f7 0%, #6366f1 100%);
+  --accent-glow: rgba(168, 85, 247, 0.3);
   
-  --pink: #ff2d55;
-  --green: #00e676; /* Vibrant Online status */
-  --green-dim: rgba(0, 230, 118, 0.12);
-  --red: #ff3b30;
-  --red-dim: rgba(255, 59, 48, 0.15);
+  --pink: #f43f5e;
+  --green: #10b981; /* Modern Emerald Online Status */
+  --green-dim: rgba(16, 185, 129, 0.1);
+  --red: #ef4444;
+  --red-dim: rgba(239, 68, 68, 0.12);
   
   /* Shapes & Layout */
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
-  --radius-xl: 28px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
   --radius-full: 9999px;
   
   /* Elevation & Shadows */
-  --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.6);
+  --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.5);
   --shadow-md: 0 12px 40px rgba(0, 0, 0, 0.7);
-  --shadow-glow: 0 0 24px var(--accent-glow);
+  --shadow-glow: 0 0 25px var(--accent-glow);
   
   /* Blur Depth */
   --backdrop-blur: blur(24px);
@@ -146,7 +146,8 @@ html, body, #root {
 .sidebar-logo { 
   width: 46px; 
   height: 46px; 
-  background: var(--accent-gradient); 
+  background: var(--bg-hover); 
+  border: 1px solid var(--primary);
   border-radius: var(--radius-md); 
   display: flex; 
   align-items: center; 
@@ -155,7 +156,7 @@ html, body, #root {
   font-weight: 800; 
   font-size: 20px; 
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(139, 92, 246, 0.35);
+  box-shadow: 0 0 12px var(--accent-glow);
   transition: var(--transition);
 }
 .sidebar-logo:hover {
@@ -185,6 +186,17 @@ html, body, #root {
   color: #ffffff; 
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 4px 12px rgba(207, 188, 255, 0.08);
+}
+.sidebar-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  height: 60%;
+  width: 3.5px;
+  background: var(--accent-gradient);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  box-shadow: 0 0 10px var(--accent-glow);
 }
 .sidebar-item .badge { 
   position: absolute; 
@@ -2093,3 +2105,175 @@ html, body, #root {
     transform: translateY(0);
   }
 }
+
+/* Custom message actions, replies, reactions, and edits styling */
+.message-actions-container {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+  z-index: 10;
+}
+.message-bubble:hover .message-actions-container {
+  opacity: 1;
+  visibility: visible;
+}
+.message-sent .message-actions-container {
+  right: 100%;
+  margin-right: 8px;
+  flex-direction: row;
+}
+.message-received .message-actions-container {
+  left: 100%;
+  margin-left: 8px;
+  flex-direction: row-reverse;
+}
+.message-action-icon-btn {
+  background: rgba(23, 23, 23, 0.9);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+}
+.message-action-icon-btn:hover {
+  color: var(--primary);
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+.message-action-icon-btn.danger:hover {
+  color: var(--red);
+  background: var(--red-dim);
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+/* Highlight Animation */
+@keyframes highlight-flash {
+  0% { 
+    background: rgba(139, 92, 246, 0.5); 
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.7); 
+  }
+  50% { 
+    background: rgba(139, 92, 246, 0.25); 
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.4); 
+  }
+  100% { 
+    box-shadow: none; 
+  }
+}
+.message-highlight-flash {
+  animation: highlight-flash 1.5s ease-out;
+}
+
+/* Reply Preview Bar and quotes */
+.reply-preview-bar {
+  animation: slideUp 0.2s ease-out;
+}
+
+.message-quote-context {
+  background: rgba(255, 255, 255, 0.06);
+  border-left: 3px solid var(--primary);
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.85;
+  transition: background-color 0.2s;
+}
+.message-quote-context:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Reactions popover and bubbles */
+.reaction-picker-popover {
+  animation: slideUp 0.15s ease-out;
+}
+.reaction-bubble {
+  transition: all 0.15s;
+}
+
+/* Discord / Reddit Style Message Feed */
+.discord-message {
+  display: flex;
+  gap: 14px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  position: relative;
+  transition: background-color 0.15s ease;
+  align-items: flex-start;
+  width: 100%;
+}
+.discord-message:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+.discord-message-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.discord-message-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.discord-username {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.discord-username:hover {
+  text-decoration: underline;
+}
+.discord-username.is-me {
+  color: var(--primary);
+}
+.discord-timestamp {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.discord-message-text {
+  font-size: 0.88rem;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+}
+.discord-message:hover .message-actions-container {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: flex !important;
+}
+.discord-message .message-actions-container {
+  position: absolute;
+  top: -12px;
+  right: 16px;
+  transform: none;
+  opacity: 0;
+  visibility: hidden;
+  display: none;
+  gap: 4px;
+  background: rgba(23, 23, 23, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 2px 4px;
+  z-index: 10;
+}
+
+

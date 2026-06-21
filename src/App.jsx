@@ -177,7 +177,13 @@ export default function App() {
         <div className="ambient-glow-orb ambient-glow-orb-2" />
       </div>
       <div className="card" style={{ textAlign: 'center', padding: '32px 48px', backdropFilter: 'var(--backdrop-blur)', border: '1px solid var(--border)', zIndex: 1, boxShadow: 'var(--shadow-md)' }}>
-        <div className="loading-pulse-logo" />
+        <div className="loading-pulse-logo" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 26, height: 26 }}>
+            <path d="M12 2C8 6.5 5 10.5 5 14.5a7 7 0 0 0 14 0c0-4-3-8-7-12.5z" />
+            <path d="M12 6.5c-2.5 3-4.5 5.5-4.5 8a4.5 4.5 0 0 0 9 0c0-2.5-2-5-4.5-8z" />
+            <path d="M12 11a3.5 3.5 0 0 0-3.5 3.5 3.5 3.5 0 0 0 7 0A3.5 3.5 0 0 0 12 11z" />
+          </svg>
+        </div>
         <p style={{ color: 'var(--text-secondary)', fontSize: 14, fontWeight: 500, letterSpacing: '0.05em' }}>CONNECTING...</p>
       </div>
     </div>

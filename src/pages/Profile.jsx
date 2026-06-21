@@ -72,7 +72,7 @@ export default function Profile() {
       <div className="page-body">
         <div className="card profile-card animate-in">
           <div className="profile-avatar-ring">
-            <Avatar username={user?.username} color={user?.avatarColor} size="xl" />
+            <Avatar username={user?.username} color={user?.avatarColor} size="xl" avatarUrl={user?.avatarUrl} />
           </div>
           <h2>@{user?.username}</h2>
           <p className="username"><Shield size={12} style={{ verticalAlign: 'middle' }} /> Anonymous Identity</p>
@@ -154,6 +154,7 @@ export default function Profile() {
           </div>
         </div>
       )}
+
     </div>
   );
 }

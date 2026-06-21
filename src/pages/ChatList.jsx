@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, MessageCircle, BellOff, Plus, X, Image } from 'lucide-react';
+import { Search, MessageCircle, BellOff, Plus, X, Image, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useNotification } from '../context/NotificationContext';
@@ -62,9 +62,17 @@ export default function ChatList({ onSelectChat, activeChatId }) {
 
   const filtered = conversations.filter(c => c.username.toLowerCase().includes(search.toLowerCase()));
 
+  const parseDate = (t) => {
+    if (!t) return new Date();
+    if (typeof t === 'string' && !t.endsWith('Z') && !t.includes('+')) {
+      return new Date(t.replace(' ', 'T') + 'Z');
+    }
+    return new Date(t);
+  };
+
   const formatTime = (t) => {
     if (!t) return '';
-    const d = new Date(t);
+    const d = parseDate(t);
     const now = new Date();
     if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
@@ -154,7 +162,7 @@ export default function ChatList({ onSelectChat, activeChatId }) {
               className={`story-avatar-wrap ${myStories ? 'has-stories' : ''}`}
               onClick={myStories ? () => setActiveStoryUser(myStories) : () => setShowCreateModal(true)}
             >
-              <Avatar username={user?.username} color={user?.avatarColor} size="md" />
+              <Avatar username={user?.username} color={user?.avatarColor} size="md" avatarUrl={user?.avatarUrl} />
               {!myStories && (
                 <div className="story-plus-badge" onClick={(e) => { e.stopPropagation(); setShowCreateModal(true); }}>
                   <Plus size={12} />
@@ -168,7 +176,7 @@ export default function ChatList({ onSelectChat, activeChatId }) {
           {otherStories.map(s => (
             <div key={s.userId} className="story-item" onClick={() => setActiveStoryUser(s)}>
               <div className="story-avatar-wrap has-stories">
-                <Avatar username={s.username} color={s.avatarColor} size="md" />
+                <Avatar username={s.username} color={s.avatarColor} size="md" avatarUrl={s.avatarUrl} />
               </div>
               <span className="story-username">{s.username}</span>
             </div>
@@ -190,7 +198,7 @@ export default function ChatList({ onSelectChat, activeChatId }) {
             onClick={() => handleSelect(c)}
             style={{ animationDelay: `${i * 0.04}s` }}
           >
-            <Avatar username={c.username} color={c.avatarColor} online={isOnline(c.id)} />
+            <Avatar username={c.username} color={c.avatarColor} online={isOnline(c.id)} avatarUrl={c.avatarUrl} />
             <div className="convo-info">
               <div className="convo-top">
                 <div className="convo-name-wrap">
@@ -284,6 +292,7 @@ export default function ChatList({ onSelectChat, activeChatId }) {
         <StoryViewer 
           storyUser={activeStoryUser} 
           onClose={() => setActiveStoryUser(null)} 
+          onDeleteStory={fetchStories}
         />
       )}
     </div>
@@ -291,9 +300,10 @@ export default function ChatList({ onSelectChat, activeChatId }) {
 }
 
 // Story Viewer Overlay Component
-function StoryViewer({ storyUser, onClose }) {
+function StoryViewer({ storyUser, onClose, onDeleteStory }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activeProgress, setActiveProgress] = useState(0);
+  const { user, token } = useAuth();
   const items = storyUser.items;
   const currentItem = items[currentIndex];
 
@@ -337,6 +347,23 @@ function StoryViewer({ storyUser, onClose }) {
     e.stopPropagation();
     if (currentIndex > 0) {
       setCurrentIndex(prev => prev - 1);
+    }
+  };
+
+  const handleDelete = async (e) => {
+    e.stopPropagation();
+    if (!window.confirm('Delete this story?')) return;
+    try {
+      const res = await fetch(`/api/stories/${currentItem.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        if (onDeleteStory) onDeleteStory();
+        onClose();
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -387,14 +414,26 @@ function StoryViewer({ storyUser, onClose }) {
 
         {/* User details header */}
         <div className="story-viewer-header">
-          <Avatar username={storyUser.username} color={storyUser.avatarColor} size="sm" />
+          <Avatar username={storyUser.username} color={storyUser.avatarColor} size="sm" avatarUrl={storyUser.avatarUrl} />
           <span className="story-viewer-username">{storyUser.username}</span>
           <span className="story-viewer-time">
             {new Date(currentItem.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
-          <button className="btn btn-ghost btn-icon story-viewer-close" onClick={onClose} style={{ marginLeft: 'auto', color: 'white' }}>
-            <X size={18} />
-          </button>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+            {storyUser.userId === user?.id && (
+              <button 
+                className="btn btn-ghost btn-icon story-viewer-delete" 
+                onClick={handleDelete} 
+                style={{ color: 'var(--red)', background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }} 
+                title="Delete Story"
+              >
+                <Trash2 size={18} />
+              </button>
+            )}
+            <button className="btn btn-ghost btn-icon story-viewer-close" onClick={onClose} style={{ color: 'white', background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Side regions for click navigation */}

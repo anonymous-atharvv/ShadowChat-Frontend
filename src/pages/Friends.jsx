@@ -60,7 +60,7 @@ export default function Friends() {
           ) : friends.map((f, i) => (
             <div key={f.id} className="friend-card animate-in" style={{ animationDelay: `${i * 0.05}s` }}>
               <div className="friend-card-inner">
-                <Avatar username={f.username} color={f.avatarColor} online={isOnline(f.id)} />
+                <Avatar username={f.username} color={f.avatarColor} online={isOnline(f.id)} avatarUrl={f.avatarUrl} />
                 <div className="user-info">
                   <h4>{f.username}</h4>
                   <p>{f.bio || 'Anonymous user'}</p>
@@ -87,7 +87,7 @@ export default function Friends() {
                 {requests.incoming.map((r, i) => (
                   <div key={r.id} className="friend-card animate-in" style={{ animationDelay: `${i * 0.05}s` }}>
                     <div className="friend-card-inner">
-                      <Avatar username={r.username} color={r.avatarColor} />
+                      <Avatar username={r.username} color={r.avatarColor} avatarUrl={r.avatarUrl} />
                       <div className="user-info"><h4>{r.username}</h4><p>{r.bio || 'Wants to connect'}</p></div>
                       <div className="user-actions">
                         <button className="btn btn-sm btn-accept" onClick={() => accept(r.id, r.userId)}>
@@ -110,7 +110,7 @@ export default function Friends() {
                 {requests.outgoing.map((r, i) => (
                   <div key={r.id} className="friend-card animate-in" style={{ animationDelay: `${i * 0.05}s` }}>
                     <div className="friend-card-inner">
-                      <Avatar username={r.username} color={r.avatarColor} />
+                      <Avatar username={r.username} color={r.avatarColor} avatarUrl={r.avatarUrl} />
                       <div className="user-info"><h4>{r.username}</h4><p>Request pending</p></div>
                     </div>
                   </div>

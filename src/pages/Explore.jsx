@@ -136,7 +136,7 @@ export default function Explore() {
           {displayUsers.map((u, i) => (
             <div key={u.id} className="explore-card animate-in" style={{ animationDelay: `${i * 0.06}s` }}>
               <div className="explore-card-inner">
-                <Avatar username={u.username} color={u.avatarColor} online={isOnline(u.id)} />
+                <Avatar username={u.username} color={u.avatarColor} online={isOnline(u.id)} avatarUrl={u.avatarUrl} />
                 <div className="user-info">
                   <h4>{u.username}</h4>
                   <p>{u.bio || 'Anonymous user'}</p>

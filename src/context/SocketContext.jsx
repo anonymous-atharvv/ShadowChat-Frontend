@@ -12,6 +12,8 @@ export function SocketProvider({ children }) {
   const [incomingMessage, setIncomingMessage] = useState(null);
   const [messageReadEvent, setMessageReadEvent] = useState(null); // { readerId }
   const [messageDeletedEvent, setMessageDeletedEvent] = useState(null); // { messageId }
+  const [messageEditedEvent, setMessageEditedEvent] = useState(null); // { messageId, newContent }
+  const [messageReactionEvent, setMessageReactionEvent] = useState(null); // { messageId, reactions }
   const [friendEvent, setFriendEvent] = useState(null);
   const [noStoreStates, setNoStoreStates] = useState({}); // friendId -> boolean
   const [clearedChatEvent, setClearedChatEvent] = useState(null); // { friendId }
@@ -36,6 +38,8 @@ export function SocketProvider({ children }) {
     s.on('message:new', (msg) => setIncomingMessage(msg));
     s.on('message:read', (data) => setMessageReadEvent(data));
     s.on('message:deleted', (data) => setMessageDeletedEvent(data));
+    s.on('message:edited', (data) => setMessageEditedEvent(data));
+    s.on('message:reaction:update', (data) => setMessageReactionEvent(data));
     s.on('typing:start', ({ userId }) => setTypingUsers(prev => new Set(prev).add(userId)));
     s.on('typing:stop', ({ userId }) => setTypingUsers(prev => { const n = new Set(prev); n.delete(userId); return n; }));
     s.on('friend:request:received', (data) => setFriendEvent({ type: 'request', ...data }));
@@ -58,8 +62,14 @@ export function SocketProvider({ children }) {
     }
   }, [socket, user?.activeStatusEnabled]);
 
-  const sendMessage = (receiverId, content, isTemporary = false, image = null, audio = null) => { 
-    socket?.emit('message:send', { receiverId, content, isTemporary, image, audio }); 
+  const sendMessage = (receiverId, content, isTemporary = false, image = null, audio = null, replyToMessageId = null) => { 
+    socket?.emit('message:send', { receiverId, content, isTemporary, image, audio, replyToMessageId }); 
+  };
+  const editMessage = (messageId, newContent) => {
+    socket?.emit('message:edit', { messageId, newContent });
+  };
+  const reactToMessage = (messageId, emoji) => {
+    socket?.emit('message:react', { messageId, emoji });
   };
   const startTyping = (receiverId) => { socket?.emit('typing:start', { receiverId }); };
   const stopTyping = (receiverId) => { socket?.emit('typing:stop', { receiverId }); };
@@ -75,9 +85,10 @@ export function SocketProvider({ children }) {
 
   return (
     <SocketContext.Provider value={{
-      socket, onlineUsers, sendMessage, startTyping, stopTyping, markRead,
+      socket, onlineUsers, sendMessage, editMessage, reactToMessage, startTyping, stopTyping, markRead,
       isOnline, isTyping, incomingMessage, setIncomingMessage,
       messageReadEvent, setMessageReadEvent, messageDeletedEvent, setMessageDeletedEvent,
+      messageEditedEvent, setMessageEditedEvent, messageReactionEvent, setMessageReactionEvent,
       friendEvent, setFriendEvent, notifyFriendRequest, notifyFriendAccepted,
       noStoreStates, toggleNoStore, clearedChatEvent
     }}>

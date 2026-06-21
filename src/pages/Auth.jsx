@@ -51,11 +51,15 @@ export default function Auth() {
 
       <div className="auth-card animate-in">
         <div className="auth-logo">
-          <div className="auth-logo-icon">
-            <MessageCircle size={24} color="white" />
+          <div className="auth-logo-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22, color: 'white' }}>
+              <path d="M12 2C8 6.5 5 10.5 5 14.5a7 7 0 0 0 14 0c0-4-3-8-7-12.5z" />
+              <path d="M12 6.5c-2.5 3-4.5 5.5-4.5 8a4.5 4.5 0 0 0 9 0c0-2.5-2-5-4.5-8z" />
+              <path d="M12 11a3.5 3.5 0 0 0-3.5 3.5 3.5 3.5 0 0 0 7 0A3.5 3.5 0 0 0 12 11z" />
+            </svg>
           </div>
           <div>
-            <h2>ShadowChat</h2>
+            <h2>Shadow Onion</h2>
             <span className="auth-logo-tag">
               <Sparkles size={10} /> Anonymous Messaging
             </span>
