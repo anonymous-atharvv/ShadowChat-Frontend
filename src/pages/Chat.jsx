@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Send, Trash2, EyeOff, Zap, Bell, BellOff, Volume2, VolumeX, Image, X, Check, CheckCheck, Mic, Sparkles, Pause, Play, Smile, CornerUpLeft, Edit2 } from 'lucide-react';
+import { ArrowLeft, Send, Trash2, EyeOff, Eye, Zap, Bell, BellOff, Volume2, VolumeX, Image, X, Check, CheckCheck, Mic, Sparkles, Pause, Play, Smile, CornerUpLeft, Edit2, Shield, ShieldOff, Lock, Unlock, Key } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useNotification } from '../context/NotificationContext';
 import Avatar from '../components/Avatar';
+import { getPrivateKey, deriveSharedKey, encryptMessage, decryptMessage } from '../utils/e2ee';
 
 function VoicePlayer({ src }) {
   const [playing, setPlaying] = useState(false);
@@ -60,7 +61,71 @@ function VoicePlayer({ src }) {
   );
 }
 
+const FingerprintQR = ({ fingerprint }) => {
+  if (!fingerprint) return null;
+  const bytes = fingerprint.split(':').map(x => parseInt(x, 16) || 0);
+  const grid = [];
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 16; x++) {
+      const isCorner = 
+        (x < 4 && y < 4) || // Top-left
+        (x >= 12 && y < 4) || // Top-right
+        (x < 4 && y >= 12);   // Bottom-left
+      
+      let active = false;
+      if (isCorner) {
+        active = (x === 0 || x === 3 || y === 0 || y === 3 || (x > 0 && x < 3 && y > 0 && y < 3));
+      } else {
+        const bitIndex = (y * 16 + x) % (bytes.length * 8);
+        const byteIndex = Math.floor(bitIndex / 8);
+        const bitOffset = bitIndex % 8;
+        active = ((bytes[byteIndex] >> bitOffset) & 1) === 1;
+      }
+      grid.push({ x, y, active });
+    }
+  }
+
+  return (
+    <svg viewBox="0 0 16 16" className="e2ee-qr-svg" style={{ width: '120px', height: '120px', margin: '0 auto', display: 'block', background: 'rgba(0,0,0,0.2)', padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+      {grid.map((p, i) => (
+        <rect 
+          key={i} 
+          x={p.x} 
+          y={p.y} 
+          width="0.9" 
+          height="0.9" 
+          fill={p.active ? 'var(--accent-glow)' : 'transparent'} 
+          rx="0.2"
+        />
+      ))}
+    </svg>
+  );
+};
+
+const decryptMessagePayload = async (msg, key) => {
+  if (!msg.iv || !key || msg.isDeleted || msg.isDecrypted) return msg;
+  try {
+    const decryptedText = await decryptMessage(msg.content, msg.iv, key);
+    return { ...msg, content: decryptedText, isEncrypted: true, isDecrypted: true };
+  } catch (err) {
+    console.error('Failed to decrypt message:', msg.id, err);
+    return { ...msg, content: '🔑 [Decryption failed: keys mismatch or message corrupted]', isEncrypted: true, isDecrypted: true, decryptionFailed: true };
+  }
+};
+
 export default function Chat({ chatUser, onBack }) {
+  const { token, user } = useAuth();
+  const { 
+    sendMessage, incomingMessage, setIncomingMessage, isOnline, isTyping, 
+    startTyping, stopTyping, markRead, noStoreStates, toggleNoStore, clearedChatEvent,
+    messageReadEvent, setMessageReadEvent, messageDeletedEvent, setMessageDeletedEvent,
+    editMessage, reactToMessage, messageEditedEvent, setMessageEditedEvent,
+    messageReactionEvent, setMessageReactionEvent
+  } = useSocket();
+  const { isMuted, muteChat, unmuteChat } = useNotification();
+  const endRef = useRef(null);
+  const typingTimer = useRef(null);
+
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
@@ -74,6 +139,117 @@ export default function Chat({ chatUser, onBack }) {
   const [editingText, setEditingText] = useState('');
   const [activeReactionPickerId, setActiveReactionPickerId] = useState(null);
 
+  const [phantomMode, setPhantomMode] = useState(false);
+
+  // Phantom Mode Screenshot & Copy Detection Event Listeners
+  useEffect(() => {
+    if (!phantomMode) return;
+
+    const handleKeyDown = (e) => {
+      // PrintScreen key
+      if (e.key === 'PrintScreen' || e.keyCode === 44) {
+        alert('⚠️ PHANTOM SHIELD: Screenshot attempt detected! This incident has been logged.');
+        e.preventDefault();
+      }
+      // OS Screenshot shortcuts (e.g. Cmd+Shift+3/4/5 on macOS, Win+Shift+S on Windows)
+      if (
+        (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4' || e.key === '5' || e.key === 's' || e.key === 'S')) ||
+        (e.ctrlKey && e.key === 'p') // Print shortcut
+      ) {
+        alert('⚠️ PHANTOM SHIELD: Screenshot attempt detected! This incident has been logged.');
+        e.preventDefault();
+      }
+    };
+
+    const handleCopy = (e) => {
+      e.preventDefault();
+      alert('⚠️ PHANTOM SHIELD: Copying text is strictly disabled in Phantom Mode.');
+    };
+
+    const handleContextMenu = (e) => {
+      e.preventDefault();
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('copy', handleCopy, true);
+    window.addEventListener('contextmenu', handleContextMenu, true);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('copy', handleCopy, true);
+      window.removeEventListener('contextmenu', handleContextMenu, true);
+    };
+  }, [phantomMode]);
+
+  // E2EE States
+  const [sharedAesKey, setSharedAesKey] = useState(null);
+  const [e2eeStatus, setE2eeStatus] = useState('initializing'); // 'initializing', 'active', 'inactive'
+  const [showE2eeModal, setShowE2eeModal] = useState(false);
+  const [isE2eeVerified, setIsE2eeVerified] = useState(false);
+  const [friendFingerprint, setFriendFingerprint] = useState('');
+
+  // Handle local E2EE Verification State
+  useEffect(() => {
+    if (user && chatUser) {
+      const val = localStorage.getItem(`sc_verified_keys_${user.id}_${chatUser.id}`) === 'true';
+      setIsE2eeVerified(val);
+    }
+  }, [user, chatUser]);
+
+  const toggleVerifyE2ee = (checked) => {
+    setIsE2eeVerified(checked);
+    if (user && chatUser) {
+      localStorage.setItem(`sc_verified_keys_${user.id}_${chatUser.id}`, checked ? 'true' : 'false');
+    }
+  };
+
+  // Derive Shared AES Key & load friend fingerprint
+  useEffect(() => {
+    if (!chatUser || !user) return;
+    let active = true;
+
+    const initE2EE = async () => {
+      setE2eeStatus('initializing');
+      setSharedAesKey(null);
+      setFriendFingerprint('');
+      try {
+        let friendPubKey = chatUser.publicKey;
+        let fingerprint = chatUser.keyFingerprint;
+        
+        if (!friendPubKey) {
+          // Fetch public key from server
+          const res = await fetch(`/api/keys/${chatUser.id}`, { headers: { Authorization: `Bearer ${token}` } });
+          if (res.ok) {
+            const data = await res.json();
+            friendPubKey = data.publicKey;
+            fingerprint = data.fingerprint;
+          }
+        }
+        
+        if (!active) return;
+
+        if (friendPubKey) {
+          const myPrivateKey = await getPrivateKey(user.id);
+          if (myPrivateKey) {
+            const derivedKey = await deriveSharedKey(myPrivateKey, friendPubKey);
+            if (!active) return;
+            setSharedAesKey(derivedKey);
+            setFriendFingerprint(fingerprint);
+            setE2eeStatus('active');
+            return;
+          }
+        }
+        setE2eeStatus('inactive');
+      } catch (err) {
+        console.error('Error establishing E2EE:', err);
+        if (active) setE2eeStatus('inactive');
+      }
+    };
+    
+    initE2EE();
+    return () => { active = false; };
+  }, [chatUser, user, token]);
+
   // Voice Masker states
   const [recording, setRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState(null);
@@ -83,20 +259,11 @@ export default function Chat({ chatUser, onBack }) {
   const [showVoiceMasker, setShowVoiceMasker] = useState(false);
   const [processingAudio, setProcessingAudio] = useState(false);
 
-  // Stylometry Cloaker states
+  // Stylometry Cloaker / AI Identity Forge states
   const [showCloakDropdown, setShowCloakDropdown] = useState(false);
+  const [forgedPersona, setForgedPersona] = useState(null);
+  const [isForging, setIsForging] = useState(false);
 
-  const { token, user } = useAuth();
-  const { 
-    sendMessage, incomingMessage, setIncomingMessage, isOnline, isTyping, 
-    startTyping, stopTyping, markRead, noStoreStates, toggleNoStore, clearedChatEvent,
-    messageReadEvent, setMessageReadEvent, messageDeletedEvent, setMessageDeletedEvent,
-    editMessage, reactToMessage, messageEditedEvent, setMessageEditedEvent,
-    messageReactionEvent, setMessageReactionEvent
-  } = useSocket();
-  const { isMuted, muteChat, unmuteChat } = useNotification();
-  const endRef = useRef(null);
-  const typingTimer = useRef(null);
 
   const noStoreActive = !!noStoreStates[chatUser?.id];
   const chatMuted = chatUser ? isMuted(chatUser.id) : false;
@@ -153,7 +320,7 @@ export default function Chat({ chatUser, onBack }) {
         if (!r.ok) throw new Error('Upload failed');
         const data = await r.json();
         
-        sendMessage(chatUser.id, '', noStoreActive, null, data.url);
+        sendMessage(chatUser.id, '', noStoreActive || phantomMode, null, data.url, null, null, phantomMode);
         
         setShowVoiceMasker(false);
         setAudioBlob(null);
@@ -166,34 +333,71 @@ export default function Chat({ chatUser, onBack }) {
     setProcessingAudio(false);
   };
 
-  const applyCloak = async (style) => {
-    const { cloakText } = await import('../utils/stylometryCloak');
-    const cloaked = cloakText(text, style);
-    setText(cloaked);
+  const applyForge = async (persona) => {
+    if (!text.trim()) return;
+    setIsForging(true);
     setShowCloakDropdown(false);
+    try {
+      const res = await fetch('/api/ai/forge', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ text, persona })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.text) {
+          setText(data.text);
+          setForgedPersona(persona);
+        }
+      } else {
+        alert('AI Forge failed to translate the message.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error connecting to AI Identity Forge.');
+    } finally {
+      setIsForging(false);
+    }
   };
 
   useEffect(() => {
     if (!chatUser) return;
     fetch(`/api/messages/${chatUser.id}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json()).then(setMessages).catch(() => {});
+      .then(r => r.json())
+      .then(async (rawMsgs) => {
+        if (sharedAesKey) {
+          const decryptedMsgs = await Promise.all(rawMsgs.map(m => decryptMessagePayload(m, sharedAesKey)));
+          setMessages(decryptedMsgs);
+        } else {
+          setMessages(rawMsgs);
+        }
+      })
+      .catch(() => {});
     markRead(chatUser.id);
-  }, [chatUser, token]);
+  }, [chatUser, token, sharedAesKey]);
 
   useEffect(() => {
     if (incomingMessage && chatUser) {
       const m = incomingMessage;
       if ((Number(m.senderId) === Number(chatUser.id) && Number(m.receiverId) === Number(user.id)) ||
           (Number(m.senderId) === Number(user.id) && Number(m.receiverId) === Number(chatUser.id))) {
-        setMessages(prev => {
-          if (prev.some(p => p.id === m.id)) return prev;
-          return [...prev, m];
-        });
-        if (Number(m.senderId) === Number(chatUser.id)) markRead(chatUser.id);
+        
+        const processIncoming = async () => {
+          const decrypted = await decryptMessagePayload(m, sharedAesKey);
+          setMessages(prev => {
+            if (prev.some(p => p.id === decrypted.id)) return prev;
+            return [...prev, decrypted];
+          });
+          if (Number(m.senderId) === Number(chatUser.id)) markRead(chatUser.id);
+        };
+        processIncoming();
       }
       setIncomingMessage(null);
     }
-  }, [incomingMessage]);
+  }, [incomingMessage, sharedAesKey, chatUser, user]);
 
   // Handle message read updates
   useEffect(() => {
@@ -232,10 +436,22 @@ export default function Chat({ chatUser, onBack }) {
   // Handle message edit updates
   useEffect(() => {
     if (messageEditedEvent) {
-      setMessages(prev => prev.map(m => m.id === messageEditedEvent.messageId ? { ...m, content: messageEditedEvent.newContent, edited: 1 } : m));
-      setMessageEditedEvent(null);
+      const processEdited = async () => {
+        const decrypted = await decryptMessagePayload(
+          { 
+            id: messageEditedEvent.messageId, 
+            content: messageEditedEvent.newContent, 
+            iv: messageEditedEvent.iv 
+          }, 
+          sharedAesKey
+        );
+        
+        setMessages(prev => prev.map(m => m.id === messageEditedEvent.messageId ? { ...m, content: decrypted.content, iv: decrypted.iv, edited: 1, isEncrypted: decrypted.isEncrypted } : m));
+        setMessageEditedEvent(null);
+      };
+      processEdited();
     }
-  }, [messageEditedEvent, setMessageEditedEvent]);
+  }, [messageEditedEvent, sharedAesKey]);
 
   // Handle message reaction updates
   useEffect(() => {
@@ -278,7 +494,21 @@ export default function Chat({ chatUser, onBack }) {
       }
     }
 
-    sendMessage(chatUser.id, text.trim(), noStoreActive, uploadedUrl, null, replyToMessage?.id);
+    let finalContent = text.trim();
+    let finalIv = null;
+
+    if (e2eeStatus === 'active' && sharedAesKey && finalContent) {
+      try {
+        const encrypted = await encryptMessage(finalContent, sharedAesKey);
+        finalContent = encrypted.ciphertext;
+        finalIv = encrypted.iv;
+      } catch (err) {
+        console.error('Encryption failed, sending as plaintext:', err);
+      }
+    }
+
+    sendMessage(chatUser.id, finalContent, noStoreActive || phantomMode, uploadedUrl, null, replyToMessage?.id, finalIv, phantomMode, forgedPersona);
+    setForgedPersona(null);
     setText('');
     setSelectedImage(null);
     setReplyToMessage(null);
@@ -313,10 +543,24 @@ export default function Chat({ chatUser, onBack }) {
     }
   };
 
-  const submitEditMessage = (msgId) => {
+  const submitEditMessage = async (msgId) => {
     if (!editingText.trim()) return;
-    editMessage(msgId, editingText.trim());
-    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: editingText.trim(), edited: 1 } : m));
+    
+    let finalContent = editingText.trim();
+    let finalIv = null;
+
+    if (e2eeStatus === 'active' && sharedAesKey) {
+      try {
+        const encrypted = await encryptMessage(finalContent, sharedAesKey);
+        finalContent = encrypted.ciphertext;
+        finalIv = encrypted.iv;
+      } catch (err) {
+        console.error('Encryption failed for edit:', err);
+      }
+    }
+
+    editMessage(msgId, finalContent, finalIv);
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: editingText.trim(), iv: finalIv, edited: 1, isEncrypted: !!finalIv } : m));
     setEditingMessageId(null);
     setEditingText('');
   };
@@ -409,7 +653,7 @@ export default function Chat({ chatUser, onBack }) {
   const typing = isTyping(chatUser.id);
 
   return (
-    <div className="chat-panel animate-in">
+    <div className={`chat-panel animate-in ${phantomMode ? 'phantom-mode-active' : ''}`}>
       <div className="chat-header">
         {onBack && <button className="btn btn-ghost btn-icon" onClick={onBack} style={{ marginRight: 4 }}><ArrowLeft size={20} /></button>}
         <Avatar username={chatUser.username} color={chatUser.avatarColor} online={online} avatarUrl={chatUser.avatarUrl} />
@@ -420,6 +664,28 @@ export default function Chat({ chatUser, onBack }) {
         
         {/* Advanced Chat Controls */}
         <div className="chat-header-controls">
+          {/* E2EE Lock State */}
+          <button 
+            className={`btn btn-ghost btn-icon chat-control-btn e2ee-indicator-btn ${e2eeStatus === 'active' ? 'active' : ''}`}
+            onClick={() => setShowE2eeModal(true)}
+            style={{ position: 'relative' }}
+            title={
+              e2eeStatus === 'active' 
+                ? (isE2eeVerified ? 'End-to-End Encrypted & Identity Verified' : 'End-to-End Encrypted (Unverified fingerprint)')
+                : 'E2EE Not Active'
+            }
+          >
+            {e2eeStatus === 'active' ? (
+              isE2eeVerified ? (
+                <Shield size={18} style={{ color: 'var(--accent-glow)' }} />
+              ) : (
+                <Shield size={18} style={{ color: 'var(--warning-color)' }} />
+              )
+            ) : (
+              <ShieldOff size={18} style={{ color: 'var(--text-muted)' }} />
+            )}
+          </button>
+
           {/* Mute Toggle */}
           <button 
             className={`btn btn-ghost btn-icon chat-control-btn ${chatMuted ? 'muted' : ''}`}
@@ -427,6 +693,16 @@ export default function Chat({ chatUser, onBack }) {
             title={chatMuted ? 'Unmute notifications' : 'Mute notifications'}
           >
             {chatMuted ? <BellOff size={18} /> : <Bell size={18} />}
+          </button>
+
+          {/* Phantom Mode Toggle */}
+          <button 
+            className={`btn btn-ghost btn-icon chat-control-btn phantom-toggle-btn ${phantomMode ? 'active' : ''}`}
+            onClick={() => setPhantomMode(!phantomMode)}
+            title="Toggle Phantom Mode (Incognito & Blur)"
+            style={{ color: phantomMode ? '#a855f7' : 'var(--text-muted)' }}
+          >
+            <Eye size={18} />
           </button>
 
           {/* No-Store Mode Toggle */}
@@ -456,7 +732,14 @@ export default function Chat({ chatUser, onBack }) {
         </div>
       </div>
 
-      {noStoreActive && (
+      {phantomMode && (
+        <div className="nostore-banner" style={{ background: 'rgba(168, 85, 247, 0.15)', borderColor: 'rgba(168, 85, 247, 0.3)', color: '#d8b4fe' }}>
+          <Eye size={13} style={{ color: '#c084fc' }} />
+          <span>Phantom mode active — screenshot & copy protection engaged</span>
+        </div>
+      )}
+
+      {noStoreActive && !phantomMode && (
         <div className="nostore-banner">
           <EyeOff size={13} />
           <span>Ghost mode active — messages vanish when you leave</span>
@@ -504,6 +787,22 @@ export default function Chat({ chatUser, onBack }) {
                   {m.isTemporary && (
                     <span className="message-temp-tag" style={{ marginLeft: 4, padding: '1px 5px', fontSize: '0.65rem' }}>
                       <Zap size={9} /> Ghost
+                    </span>
+                  )}
+                  {(m.isEncrypted || m.iv) && (
+                    <span 
+                      className="message-e2ee-tag" 
+                      style={{ 
+                        marginLeft: 6, 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        color: 'var(--accent-glow)',
+                        fontSize: '0.65rem',
+                        gap: '2px'
+                      }}
+                      title="End-to-End Encrypted Message"
+                    >
+                      <Lock size={9} /> e2ee
                     </span>
                   )}
                   {Number(m.senderId) === Number(user.id) && !m.isTemporary && (
@@ -588,14 +887,41 @@ export default function Chat({ chatUser, onBack }) {
                   </div>
                 ) : (
                   m.content && (
-                    <div className="discord-message-text">
-                      {m.content}
-                      {m.edited === 1 && (
-                        <span className="message-edited-label" style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: 6, fontStyle: 'italic' }}>
-                          (edited)
-                        </span>
+                    <>
+                      <div 
+                        className={`discord-message-text ${m.isPhantom ? 'phantom-message-text' : ''}`}
+                        title={m.isPhantom ? 'Phantom message — hover to reveal' : undefined}
+                      >
+                        {m.content}
+                        {m.edited === 1 && (
+                          <span className="message-edited-label" style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: 6, fontStyle: 'italic' }}>
+                            (edited)
+                          </span>
+                        )}
+                      </div>
+                      {m.forgedPersona && (
+                        <div 
+                          className="forged-persona-tag" 
+                          style={{ 
+                            display: 'inline-flex', 
+                            alignItems: 'center', 
+                            gap: 4, 
+                            fontSize: '0.62rem', 
+                            color: '#c084fc', 
+                            background: 'rgba(168, 85, 247, 0.12)', 
+                            border: '1px solid rgba(168, 85, 247, 0.25)', 
+                            padding: '2px 6px', 
+                            borderRadius: 4, 
+                            marginTop: 4, 
+                            width: 'max-content',
+                            userSelect: 'none',
+                            fontWeight: 500
+                          }}
+                        >
+                          <Sparkles size={8} /> Forged: {m.forgedPersona}
+                        </div>
                       )}
-                    </div>
+                    </>
                   )
                 )}
 
@@ -843,6 +1169,28 @@ export default function Chat({ chatUser, onBack }) {
           </div>
         )}
         
+        {isForging && (
+          <div className="forged-active-badge animate-in" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.2)', borderRadius: 8, padding: '4px 10px', fontSize: '0.75rem', color: '#c084fc', marginBottom: 8, width: 'fit-content' }}>
+            <span style={{ display: 'inline-block', width: 12, height: 12, border: '2px solid #a855f7', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+            <span>AI Forge is rewriting your message...</span>
+          </div>
+        )}
+
+        {forgedPersona && !isForging && (
+          <div className="forged-active-badge animate-in" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.3)', borderRadius: 8, padding: '4px 10px', fontSize: '0.75rem', color: '#e9d5ff', marginBottom: 8, width: 'fit-content' }}>
+            <Sparkles size={12} style={{ color: '#c084fc' }} />
+            <span>Identity Forge Engaged: <strong>{forgedPersona}</strong> style applied</span>
+            <button 
+              type="button" 
+              onClick={() => { setForgedPersona(null); }} 
+              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 2, marginLeft: 4 }}
+              title="Clear AI Persona"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
+
         <form className="chat-input-area" onSubmit={handleSend}>
           <label className="btn btn-ghost btn-icon attachment-btn" title="Attach Image" style={{ cursor: 'pointer' }}>
             <Image size={18} />
@@ -870,10 +1218,10 @@ export default function Chat({ chatUser, onBack }) {
           
           <input 
             className="input" 
-            placeholder={noStoreActive ? "Ghost message..." : "Type a message..."} 
+            placeholder={isForging ? "AI Forge masking..." : noStoreActive ? "Ghost message..." : "Type a message..."} 
             value={text} 
             onChange={e => handleTyping(e.target.value)}
-            disabled={uploading}
+            disabled={uploading || isForging}
           />
 
           {text.trim() && (
@@ -881,28 +1229,58 @@ export default function Chat({ chatUser, onBack }) {
               <button 
                 type="button" 
                 className={`btn btn-ghost btn-icon attachment-btn ${showCloakDropdown ? 'active' : ''}`} 
-                title="Stylometry Cloaker"
+                title="AI Identity Forge"
                 onClick={() => {
                   setShowCloakDropdown(!showCloakDropdown);
                   setShowVoiceMasker(false);
                 }}
-                disabled={uploading}
+                disabled={uploading || isForging}
                 style={{ padding: 6 }}
               >
                 <Sparkles size={18} />
               </button>
               {showCloakDropdown && (
-                <div className="cloak-dropdown-menu animate-in" style={{ position: 'absolute', bottom: '100%', right: 0, marginBottom: 8, background: 'rgba(23, 23, 23, 0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: 12, padding: 6, display: 'flex', flexDirection: 'column', gap: 4, zIndex: 100, minWidth: 160, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5)' }}>
-                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', padding: '4px 8px', fontWeight: 600, borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 2 }}>Cloak Style Fingerprint</div>
-                  <button type="button" className="cloak-dropdown-item" onClick={() => applyCloak('leetspeak')} style={{ padding: '6px 8px', fontSize: '0.78rem', background: 'none', border: 'none', color: 'var(--text)', textAlign: 'left', cursor: 'pointer', borderRadius: 6, width: '100%' }}>
-                    Leet H4x0r
-                  </button>
-                  <button type="button" className="cloak-dropdown-item" onClick={() => applyCloak('cyberpunk')} style={{ padding: '6px 8px', fontSize: '0.78rem', background: 'none', border: 'none', color: 'var(--text)', textAlign: 'left', cursor: 'pointer', borderRadius: 6, width: '100%' }}>
-                    Cyberpunk Netrunner
-                  </button>
-                  <button type="button" className="cloak-dropdown-item" onClick={() => applyCloak('diplomatic')} style={{ padding: '6px 8px', fontSize: '0.78rem', background: 'none', border: 'none', color: 'var(--text)', textAlign: 'left', cursor: 'pointer', borderRadius: 6, width: '100%' }}>
-                    Corporate Diplomat
-                  </button>
+                <div className="cloak-radial-container">
+                  <div className="cloak-radial-center">
+                    <Sparkles size={20} style={{ color: '#a855f7' }} />
+                    <span style={{ fontSize: '0.55rem', marginTop: 4 }}>AI Forge</span>
+                  </div>
+                  
+                  <div 
+                    className="cloak-radial-item top" 
+                    onClick={() => applyForge('Psychoanalytic')}
+                    title="Psychoanalytic (Freudian slang, probing, over-analyzing)"
+                  >
+                    🧠 Psycho
+                    <span>Analytic</span>
+                  </div>
+                  
+                  <div 
+                    className="cloak-radial-item right" 
+                    onClick={() => applyForge('Cyber-Street')}
+                    title="Cyber-Street (high-tech low-life, l33t, street hacker)"
+                  >
+                    🦾 Cyber
+                    <span>Street</span>
+                  </div>
+                  
+                  <div 
+                    className="cloak-radial-item bottom" 
+                    onClick={() => applyForge('Elite Academic')}
+                    title="Elite Academic (pretentious, long-winded, passive voice)"
+                  >
+                    🎓 Academic
+                    <span>Pretentious</span>
+                  </div>
+                  
+                  <div 
+                    className="cloak-radial-item left" 
+                    onClick={() => applyForge('Corporate Politician')}
+                    title="Corporate Politician (spin-doctored, sanitized, buzzword-heavy)"
+                  >
+                    👔 Corporate
+                    <span>Politician</span>
+                  </div>
                 </div>
               )}
             </div>
@@ -962,6 +1340,68 @@ export default function Chat({ chatUser, onBack }) {
             <button className="btn btn-ghost btn-icon lightbox-close" onClick={() => setLightboxUrl(null)}>
               <X size={20} />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* E2EE Key Verification Modal */}
+      {showE2eeModal && (
+        <div className="modal-overlay" onClick={() => setShowE2eeModal(false)}>
+          <div className="modal-card e2ee-modal-card animate-in" onClick={e => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+            <div className="modal-icon-wrap" style={{ background: 'rgba(16, 185, 129, 0.1)', color: 'var(--accent-glow)' }}>
+              <Key size={28} />
+            </div>
+            <h3>End-to-End Encryption</h3>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 16 }}>
+              Messages in this chat are encrypted client-side using X25519/P-256 curve ECDH key exchange and AES-256-GCM.
+            </p>
+
+            <div className="e2ee-qr-section" style={{ margin: '16px 0', position: 'relative' }}>
+              <FingerprintQR fingerprint={friendFingerprint || user?.keyFingerprint} />
+              <div className="e2ee-qr-scanner-glow" />
+            </div>
+
+            <div className="e2ee-fingerprints-container" style={{ display: 'flex', flexDirection: 'column', gap: 10, background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 8, border: '1px solid rgba(255,255,255,0.05)', margin: '12px 0' }}>
+              <div className="fingerprint-row" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 6 }}>
+                <span className="fingerprint-label" style={{ color: 'var(--text-muted)' }}>Your Fingerprint</span>
+                <span className="fingerprint-value" style={{ fontFamily: 'monospace', color: 'var(--text)' }} title={user?.keyFingerprint}>
+                  {user?.keyFingerprint ? `${user.keyFingerprint.substring(0, 23)}...` : 'Generating...'}
+                </span>
+              </div>
+              <div className="fingerprint-row" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', paddingTop: 4 }}>
+                <span className="fingerprint-label" style={{ color: 'var(--text-muted)' }}>{chatUser?.username}'s Fingerprint</span>
+                <span className="fingerprint-value" style={{ fontFamily: 'monospace', color: 'var(--text)' }} title={friendFingerprint}>
+                  {friendFingerprint ? `${friendFingerprint.substring(0, 23)}...` : 'Generating...'}
+                </span>
+              </div>
+            </div>
+
+            <div className="e2ee-verify-toggle-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.02)', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.05)', margin: '12px 0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {isE2eeVerified ? (
+                  <Lock size={16} style={{ color: 'var(--accent-glow)' }} />
+                ) : (
+                  <Unlock size={16} style={{ color: 'var(--warning-color)' }} />
+                )}
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>Verify Partner Identity</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Confirm that fingerprints match to trust this connection</div>
+                </div>
+              </div>
+              <div className={`nostore-toggle-switch ${isE2eeVerified ? 'active' : ''}`} onClick={() => toggleVerifyE2ee(!isE2eeVerified)} style={{ cursor: 'pointer' }}>
+                <div className="nostore-toggle-thumb" />
+              </div>
+            </div>
+
+            <div className="modal-actions" style={{ marginTop: 20 }}>
+              <button 
+                className="btn btn-primary" 
+                onClick={() => setShowE2eeModal(false)}
+                style={{ width: '100%' }}
+              >
+                Close Verification
+              </button>
+            </div>
           </div>
         </div>
       )}

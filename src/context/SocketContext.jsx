@@ -35,7 +35,10 @@ export function SocketProvider({ children }) {
     s.on('user:status', ({ userId, isOnline }) => {
       setOnlineUsers(prev => { const n = new Set(prev); isOnline ? n.add(userId) : n.delete(userId); return n; });
     });
-    s.on('message:new', (msg) => setIncomingMessage(msg));
+    s.on('message:new', (msg) => {
+      if (msg.isCover) return; // Discard cover traffic packets silently
+      setIncomingMessage(msg);
+    });
     s.on('message:read', (data) => setMessageReadEvent(data));
     s.on('message:deleted', (data) => setMessageDeletedEvent(data));
     s.on('message:edited', (data) => setMessageEditedEvent(data));
@@ -54,6 +57,51 @@ export function SocketProvider({ children }) {
     return () => { s.disconnect(); socketRef.current = null; };
   }, [token, user]);
 
+  const onlineUsersRef = useRef(onlineUsers);
+  useEffect(() => {
+    onlineUsersRef.current = onlineUsers;
+  }, [onlineUsers]);
+
+  // Cover Traffic (Metadata Guard) Emitter Loop
+  useEffect(() => {
+    if (!socket || !user) return;
+
+    let timerId = null;
+
+    const scheduleNextCoverTraffic = () => {
+      // Random interval between 30s and 300s (30000ms to 300000ms)
+      const delay = Math.floor(Math.random() * (300000 - 30000 + 1)) + 30000;
+      
+      timerId = setTimeout(() => {
+        const isEnabled = localStorage.getItem(`sc_metadata_guard_${user.id}`) === 'true';
+        const currentOnline = onlineUsersRef.current;
+        if (isEnabled && currentOnline && currentOnline.size > 0) {
+          // Select a random online friend
+          const onlineArr = Array.from(currentOnline);
+          const randomFriendId = onlineArr[Math.floor(Math.random() * onlineArr.length)];
+          
+          if (randomFriendId) {
+            // Send empty dummy message payload marked as cover traffic
+            socket.emit('message:send', {
+              receiverId: randomFriendId,
+              content: 'dummy_cover_traffic_' + Math.random().toString(36).substr(2, 9),
+              isTemporary: true,
+              isCover: true
+            });
+          }
+        }
+        // Schedule next cover traffic packet
+        scheduleNextCoverTraffic();
+      }, delay);
+    };
+
+    scheduleNextCoverTraffic();
+
+    return () => {
+      if (timerId) clearTimeout(timerId);
+    };
+  }, [socket, user]);
+
   useEffect(() => {
     if (socket && user?.activeStatusEnabled) {
       socket.emit('get:online');
@@ -62,11 +110,11 @@ export function SocketProvider({ children }) {
     }
   }, [socket, user?.activeStatusEnabled]);
 
-  const sendMessage = (receiverId, content, isTemporary = false, image = null, audio = null, replyToMessageId = null) => { 
-    socket?.emit('message:send', { receiverId, content, isTemporary, image, audio, replyToMessageId }); 
+  const sendMessage = (receiverId, content, isTemporary = false, image = null, audio = null, replyToMessageId = null, iv = null, isPhantom = false, forgedPersona = null) => { 
+    socket?.emit('message:send', { receiverId, content, isTemporary, image, audio, replyToMessageId, iv, isPhantom, forgedPersona }); 
   };
-  const editMessage = (messageId, newContent) => {
-    socket?.emit('message:edit', { messageId, newContent });
+  const editMessage = (messageId, newContent, iv = null) => {
+    socket?.emit('message:edit', { messageId, newContent, iv });
   };
   const reactToMessage = (messageId, emoji) => {
     socket?.emit('message:react', { messageId, emoji });

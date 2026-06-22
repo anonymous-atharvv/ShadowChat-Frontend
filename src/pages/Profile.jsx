@@ -44,6 +44,16 @@ export default function Profile() {
     }
   };
 
+  const [metadataGuard, setMetadataGuard] = useState(() => {
+    return localStorage.getItem(`sc_metadata_guard_${user?.id}`) === 'true';
+  });
+
+  const toggleMetadataGuard = () => {
+    const nextVal = !metadataGuard;
+    setMetadataGuard(nextVal);
+    localStorage.setItem(`sc_metadata_guard_${user?.id}`, nextVal ? 'true' : 'false');
+  };
+
   const deleteAccount = async () => {
     setDeleting(true);
     try {
@@ -108,7 +118,9 @@ export default function Profile() {
 
         <div className="card animate-in" style={{ marginTop: 16, animationDelay: '0.25s' }}>
           <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 12 }}>Settings</h3>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          
+          {/* Active Status */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 16, borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
             <div>
               <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>Show Active Status</div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.4 }}>
@@ -118,6 +130,23 @@ export default function Profile() {
             <div 
               className={`nostore-toggle-switch ${user?.activeStatusEnabled ? 'active' : ''}`}
               onClick={toggleActiveStatus}
+              style={{ cursor: 'pointer', flexShrink: 0, marginLeft: 16 }}
+            >
+              <div className="nostore-toggle-thumb" />
+            </div>
+          </div>
+
+          {/* Metadata Guard (Cover Traffic) */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16 }}>
+            <div>
+              <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>Metadata Guard (Cover Traffic)</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.4 }}>
+                Periodically sends encrypted dummy packets to random online friends. This masks your real message timing profiles to thwart network traffic correlation attacks.
+              </div>
+            </div>
+            <div 
+              className={`nostore-toggle-switch ${metadataGuard ? 'active' : ''}`}
+              onClick={toggleMetadataGuard}
               style={{ cursor: 'pointer', flexShrink: 0, marginLeft: 16 }}
             >
               <div className="nostore-toggle-thumb" />

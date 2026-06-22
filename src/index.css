@@ -2276,4 +2276,202 @@ html, body, #root {
   z-index: 10;
 }
 
+/* ================================================
+   E2EE CLIENT INTEGRATION STYLE RULES
+   ================================================ */
+.e2ee-indicator-btn.active {
+  animation: pulseGlowGreen 3s infinite;
+}
+@keyframes pulseGlowGreen {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(16, 185, 129, 0.4)); }
+  50% { filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.8)); }
+}
+.message-e2ee-tag {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.e2ee-qr-section {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 12px;
+}
+.e2ee-qr-scanner-glow {
+  position: absolute;
+  width: 140px;
+  height: 140px;
+  border: 1px dashed rgba(16, 185, 129, 0.3);
+  border-radius: 12px;
+  pointer-events: none;
+  animation: scanOutline 8s linear infinite;
+}
+@keyframes scanOutline {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.e2ee-modal-card {
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(16, 185, 129, 0.1) !important;
+}
+.e2ee-qr-svg rect {
+  transition: fill 0.3s ease;
+}
+
+/* ================================================
+   PHANTOM MODE SPECTRAL STYLE RULES
+   ================================================ */
+.phantom-mode-active {
+  position: relative;
+  background: radial-gradient(circle at center, #0f0c1b 0%, #05020a 100%) !important;
+}
+
+.phantom-mode-active::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(168, 85, 247, 0.04), rgba(0, 255, 0, 0.01), rgba(168, 85, 247, 0.04));
+  z-index: 9999;
+  background-size: 100% 4px, 6px 100%;
+  pointer-events: none;
+}
+
+.phantom-mode-active::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: linear-gradient(to bottom, transparent 0%, rgba(168, 85, 247, 0.08) 10%, transparent 20%);
+  animation: scanlineScroll 6s linear infinite;
+  z-index: 9998;
+  pointer-events: none;
+}
+
+@keyframes scanlineScroll {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.phantom-message-text {
+  filter: blur(6px);
+  transition: filter 0.3s ease;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  cursor: pointer;
+}
+
+.phantom-message-text:hover {
+  filter: blur(0);
+}
+
+/* ================================================
+   AI IDENTITY FORGE RADIAL PICKER
+   ================================================ */
+.cloak-radial-container {
+  position: absolute;
+  bottom: 50px;
+  right: -20px;
+  width: 250px;
+  height: 250px;
+  border-radius: 50%;
+  background: rgba(10, 6, 20, 0.96);
+  backdrop-filter: blur(15px);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  box-shadow: 0 0 35px rgba(168, 85, 247, 0.3);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  pointer-events: auto;
+  transform-origin: bottom center;
+  animation: radialOpen 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes radialOpen {
+  from { transform: scale(0.3) translateY(40px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.cloak-radial-center {
+  color: #a855f7;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.68rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 8px rgba(168, 85, 247, 0.6);
+  pointer-events: none;
+}
+
+.cloak-radial-item {
+  position: absolute;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(20, 15, 35, 0.8);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: var(--text-secondary);
+  font-size: 0.65rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 4px;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.cloak-radial-item:hover {
+  background: rgba(168, 85, 247, 0.3);
+  border-color: #c084fc;
+  color: #ffffff;
+  transform: scale(1.15);
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.5);
+}
+
+.cloak-radial-item span {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.cloak-radial-item:hover span {
+  color: #e9d5ff;
+}
+
+/* Specific radial translation coordinates around central circle */
+.cloak-radial-item.top {
+  transform: translateY(-80px);
+}
+.cloak-radial-item.top:hover {
+  transform: translateY(-80px) scale(1.15);
+}
+
+.cloak-radial-item.right {
+  transform: translateX(80px);
+}
+.cloak-radial-item.right:hover {
+  transform: translateX(80px) scale(1.15);
+}
+
+.cloak-radial-item.bottom {
+  transform: translateY(80px);
+}
+.cloak-radial-item.bottom:hover {
+  transform: translateY(80px) scale(1.15);
+}
+
+.cloak-radial-item.left {
+  transform: translateX(-80px);
+}
+.cloak-radial-item.left:hover {
+  transform: translateX(-80px) scale(1.15);
+}
+
 

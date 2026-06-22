@@ -7,16 +7,20 @@ import { SocketProvider } from './context/SocketContext';
 import { NotificationProvider } from './context/NotificationContext';
 import './index.css';
 
-const apiUrl = import.meta.env.VITE_API_URL;
-if (apiUrl) {
-  const originalFetch = window.fetch;
-  window.fetch = function (input, init) {
-    if (typeof input === 'string' && input.startsWith('/api')) {
-      input = `${apiUrl.replace(/\/$/, '')}${input}`;
-    }
-    return originalFetch(input, init);
-  };
-}
+const originalFetch = window.fetch;
+window.fetch = function (input, init) {
+  const apiUrl = import.meta.env.VITE_API_URL || '';
+  let target = input;
+  if (typeof input === 'string' && input.startsWith('/api')) {
+    target = `${apiUrl.replace(/\/$/, '')}${input}`;
+  }
+  
+  const options = init || {};
+  if (typeof input === 'string' && input.startsWith('/api')) {
+    options.credentials = 'include';
+  }
+  return originalFetch(target, options);
+};
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
